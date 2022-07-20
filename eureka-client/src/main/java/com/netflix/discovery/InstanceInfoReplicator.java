@@ -61,8 +61,11 @@ class InstanceInfoReplicator implements Runnable {
     }
 
     public void start(int initialDelayMs) {
+        //cas保证了线程的安全性
         if (started.compareAndSet(false, true)) {
+            //标识当前服务实例信息为脏信息
             instanceInfo.setIsDirty();  // for initial register
+            //启动定时任务，将当前InstanceInfoReplicator实例作为任务传入定时器
             Future next = scheduler.schedule(this, initialDelayMs, TimeUnit.SECONDS);
             scheduledPeriodicRef.set(next);
         }
@@ -118,12 +121,15 @@ class InstanceInfoReplicator implements Runnable {
 
             Long dirtyTimestamp = instanceInfo.isDirtyWithTime();
             if (dirtyTimestamp != null) {
+                //发起服务注册
                 discoveryClient.register();
+                //重置服务实例信息
                 instanceInfo.unsetIsDirty(dirtyTimestamp);
             }
         } catch (Throwable t) {
             logger.warn("There was a problem with the instance info replicator", t);
         } finally {
+            //启动一个定时任务，默认每隔30秒执行一次，如果实例信息有变更，会重新发起注册
             Future next = scheduler.schedule(this, replicationIntervalSeconds, TimeUnit.SECONDS);
             scheduledPeriodicRef.set(next);
         }
